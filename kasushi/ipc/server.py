@@ -42,7 +42,6 @@ class IPCServer(IPC):
             await ws.send_json({'type': 'login_success'})
             return True
 
-
     async def websocket_handler(self, request):
         # Got websocket connection
         ws = aiohttp.web.WebSocketResponse()
@@ -56,8 +55,7 @@ class IPCServer(IPC):
                 json_data = msg.json()
 
                 if logged_in:
-                    logger.debug(f'[{ws}] {json_data}')
-                    await self.handle_message(ws, json_data)
+                    await self.handle_incoming_message(ws, json_data)
                 else:
                     logged_in = await self.handle_login(ws, json_data)
 
@@ -66,7 +64,7 @@ class IPCServer(IPC):
         return ws
 
     async def handle_incoming_message(self, ws, data):
-        pass
+        logger.debug(f'[{ws}] {data}')
 
     async def async_setup(self):
         app = aiohttp.web.Application()
