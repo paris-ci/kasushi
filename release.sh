@@ -41,6 +41,14 @@ echo "==> Pushed tag $NEW_GIT_TAG"
 # Run build script
 echo "==> Running build script"
 ./build.sh
+
+echo "==> Checking build status"
 twine check dist/*
 
+echo "==> Uploading to PyPI"
 twine upload dist/*
+
+echo "==> Deleting temporary files"
+rm -R dist
+
+
