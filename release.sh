@@ -2,6 +2,7 @@
 
 export COLOR_NC='\033[0m' # No Color
 export COLOR_RED='\033[0;31m'
+export COLOR_GREEN='\033[0;32m'
 
 set -eo pipefail
 
@@ -27,11 +28,15 @@ done
 echo -e "==> Previous version was v$COLOR_RED$PREVIOUS_GIT_TAG$COLOR_NC"
 
 # Sementic versionning: get the next PATCH version using bash only
-NEXT_VERSION=$(echo "$PREVIOUS_GIT_TAG" | awk -F. '{$NF = $NF + 1; print $0}')
+IFS="." read -r -a mmp <<< "$PREVIOUS_GIT_TAG"
+(( mmp[2]++ ))
+NEXT_VERSION=${mmp[0]}.${mmp[1]}.${mmp[2]}
 
 # Ask for input
-echo "==> ! Enter the new version number (e.g. $NEXT_VERSION)> "
+echo -e "==> ! Enter the new version number (e.g. $COLOR_GREEN$NEXT_VERSION$COLOR_NC)> "
 read -r NEW_GIT_TAG
+
+NEW_GIT_TAG=${NEW_GIT_TAG:-$NEXT_VERSION}
 
 # Create tag for new release
 git tag "$NEW_GIT_TAG"
