@@ -55,7 +55,6 @@ class Cache:
         return await self.bdelete(key.encode())
 
 
-
 class CacheCog(commands.Cog):
     def __init__(self, bot: commands.Bot) -> None:
         self.bot = bot
@@ -76,11 +75,7 @@ class CacheCog(commands.Cog):
                 message="Cache isn't configured. Please set the `server_ip` key in your cache config."
             )
 
-        server_port = cache_config.get('server_port')
-        if not server_port:
-            raise InvalidConfigurationError(
-                message="Cache isn't configured. Please set the `server_port` key in your cache config."
-            )
+        server_port = cache_config.setdefault('server_port', 11211)
 
         return config
 
