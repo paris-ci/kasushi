@@ -10,7 +10,6 @@ cd "$(dirname "$0")"
 
 PREVIOUS_GIT_TAG=$(git describe --abbrev=0 --tags)
 
-echo -e "==> Previous version was v$COLOR_RED$PREVIOUS_GIT_TAG$COLOR_NC"
 
 # Ensure working tree is clean or ask to commit
 # Don't continue while working tree isn't clean
@@ -24,6 +23,8 @@ while true; do
     break
   fi
 done
+
+echo -e "==> Previous version was v$COLOR_RED$PREVIOUS_GIT_TAG$COLOR_NC"
 
 # Ask for input
 echo "==> ! Enter the new version number (e.g. 1.2.3)> "
