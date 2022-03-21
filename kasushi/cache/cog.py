@@ -1,6 +1,7 @@
 import inspect
+import pickle
 from datetime import timedelta
-from typing import Optional
+from typing import Optional, Union, Any
 from discord.ext import commands
 
 from kasushi.exceptions import InvalidConfigurationError, InvalidRequirementsError
@@ -38,32 +39,21 @@ class Cache:
         """
         return await self._raw_cache.delete(key)
 
-    async def bincr(self, key: bytes, increment: int = 1) -> bool:
-        """
-        Increment a key in the cache, without fetching it.
-        """
-        return await self._raw_cache.incr(key, increment)
+    def encode(self, obj: Any) -> bytes:
+        return pickle.dumps(obj)
 
-    async def bdecr(self, key: bytes, decrement: int = 1) -> bool:
-        """
-        Decrement a key in the cache, without fetching it.
-        """
-        return await self._raw_cache.decr(key, decrement)
+    def decode(self, data: bytes) -> Any:
+        return pickle.loads(data)
 
-    async def get(self, key: str, *, default: Optional[str] = None) -> str:
-        return (await self.bget(key.encode(), default=default.encode())).decode()
+    async def get(self, key: str, *, default: Any = None) -> str:
+        return self.decode(await self.bget(key.encode(), default=self.encode(default)))
 
-    async def set(self, key: str, value: str, *, expire: Optional[timedelta] = None) -> bool:
-        return await self.bset(key.encode(), value.encode(), expire=expire)
+    async def set(self, key: str, value: Any, *, expire: Optional[timedelta] = None) -> bool:
+        return await self.bset(key.encode(), self.encode(value), expire=expire)
 
     async def delete(self, key: str) -> bool:
         return await self.bdelete(key.encode())
 
-    async def incr(self, key: str, increment: int = 1) -> bool:
-        return await self.bincr(key.encode(), increment)
-
-    async def decr(self, key: str, decrement: int = 1) -> bool:
-        return await self.bdecr(key.encode(), decrement)
 
 
 class CacheCog(commands.Cog):
