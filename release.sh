@@ -27,6 +27,7 @@ read -r NEW_GIT_TAG
 echo "==> Running build script"
 ./build.sh
 
+twine check dist/*
 # Create tag for new release
 git tag "$NEW_GIT_TAG"
 echo "==> Created tag $NEW_GIT_TAG"
