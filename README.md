@@ -23,7 +23,7 @@ It provides a number of useful features for bots, such as cache, IPC, tortoise m
 
 It is really easy to use, and requires a minimum amount of configuration.
 
-> 1. Download jishaku on the command line using pip:
+> 1. Download kasushi on the command line using pip:
 > ```bash
 > pip install -U kasushi
 > ```
