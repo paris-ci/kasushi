@@ -31,15 +31,46 @@ It is really easy to use, and requires a minimum amount of configuration.
 > ```python
 > import kasushi
 > # See below for settings you can pass to configure.
-> kasushi.configure(bot, {}) 
+> await kasushi.configure(bot, {}) 
 > ```
 > 3. Load the extensions in your bot code before it runs:
 > ```python
-> bot.load_extension('kasushi.cache')
+> await bot.load_extension('kasushi.cache')
 > ```
 > You're done!
 
 
-## Settings
+## Modules and settings
+
+Many modules are available in kasushi. You should load them in your bot, and pass settings to configure.
 
 Depending on the module(s) you want to use, you can pass different settings to configure.
+
+### Cache
+
+The cache module allows for connecting to a [memcached](https://memcached.org/) server.
+It can be used to store cached data between reboots of the bot, like cooldowns and user data.
+
+#### Usage
+
+Once installed and loaded, the cache class is made available in `bot.cache`.
+```python
+await bot.cache.set("coins", 0)
+await bot.cache.set("coins", 10)
+await bot.cache.get("coins") # 10
+await bot.cache.delete("coins")
+await bot.cache.get("coins", default=5) # 5
+```
+
+#### Configuration example
+
+You can pass the following dictionary to configure:
+
+```python
+{
+    "cache": {
+        "server_ip": "127.0.0.1",
+        "server_port": 11211,
+    }
+}
+```
