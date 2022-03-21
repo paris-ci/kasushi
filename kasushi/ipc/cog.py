@@ -4,6 +4,7 @@ from typing import Optional
 from discord.ext import commands
 
 from kasushi.exceptions import InvalidConfigurationError
+from kasushi.ipc.base import IPC
 from kasushi.ipc.client import IPCClient
 from kasushi.ipc.server import IPCServer
 
@@ -11,27 +12,26 @@ from kasushi.ipc.server import IPCServer
 class IPCCog(commands.Cog):
     def __init__(self, bot: commands.AutoShardedBot) -> None:
         self.bot = bot
+        self.bot.ipc = IPC(bot, {})
 
     async def config_check(self) -> dict:
         config: dict = self.bot._kasushi_config
         ipc_config: Optional[dict] = config.get('ipc')
         if not ipc_config:
             raise InvalidConfigurationError(
-                message="Cache isn't configured. Please set the `ipc` in your config."
+                message="IPC isn't configured. Please set the `ipc` in your config."
             )
 
-        ipc_server = ipc_config.get('server_ip')
+        ipc_server = ipc_config.get('server_host')
         if not ipc_server:
             raise InvalidConfigurationError(
-                message="Cache isn't configured. Please set the `server_ip` key in your ipc config."
+                message="IPC isn't configured. Please set the `server_host` key in your ipc config."
             )
 
-        ipc_port = ipc_config.setdefault('server_port', 12321)
-        polling_delay_seconds = ipc_config.setdefault('polling_delay_seconds', 5)
         shared_secret = ipc_config.get('shared_secret')
         if not shared_secret:
             raise InvalidConfigurationError(
-                message="Cache isn't configured. "
+                message="IPC isn't configured. "
                         "Please set the `shared_secret` key in your ipc config to a random string of your choosing."
             )
 
@@ -45,14 +45,14 @@ class IPCCog(commands.Cog):
 
         shard_zero = self.bot.get_shard(0)
         if shard_zero:
-            self.bot.ipc = IPCServer(self.bot, config)
+            self.bot.ipc = IPCServer(self.bot, config['ipc'])
         else:
-            self.bot.ipc = IPCClient(self.bot, config)
+            self.bot.ipc = IPCClient(self.bot, config['ipc'])
 
         await self.bot.ipc.async_setup()
 
     async def cog_unload(self) -> None:
-        pass
+        await self.bot.ipc.async_teardown()
 
 
 async def async_setup(bot: commands.AutoShardedBot):

@@ -80,24 +80,24 @@ You can pass the following dictionary to configure:
 IPC stands for Inter-Process Communication. It allows for sending messages between processes, or, in our case, different
 processes for the same bot.
 
-The process hosting the first shard (shard 0) will be the "master process".
-It'll host the webserver allowing other processes to connect to it.
+The process hosting the first shard (shard 0) will be the "master process". It'll host the webserver allowing other
+processes to connect to it.
 
 It'll also pass messages to the other bots if needed.
 
 #### Usage
 
-Once installed and loaded, the IPC class is made available in `bot.ipc`.
-All bots need to be able to access the first shard's IPC server.
+Once installed and loaded, the IPC class is made available in `bot.ipc`. All bots need to be able to access the first
+shard's IPC server.
 
 #### Configuration example
 
 ```python
 {
     "ipc": {
-        "server_ip": "127.0.0.1",   # Ignored on shard 0
-        "server_port": 12321,
-        "polling_delay_seconds": 5, # The higher this is, the slower IPC requests will be, but the lighter the load.
+        "server_host": "http://127.0.0.1:12321",  # Ignored on shard 0
+        "server_listen_host": "0.0.0.0",
+        "server_listen_port": 12321,
         "shared_secret": "secret",  # This is used to authenticate with the IPC server.
     }
 }

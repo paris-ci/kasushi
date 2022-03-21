@@ -1,3 +1,6 @@
+import json
+
+import aiohttp
 from discord.ext import commands
 
 
@@ -10,4 +13,7 @@ class IPC:
         self.online: bool = False
 
     async def async_setup(self):
+        pass
+
+    async def async_teardown(self):
         pass
