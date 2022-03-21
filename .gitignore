@@ -1,6 +1,6 @@
 /.idea
 /dist/
 *.egg-info
-/__pycache__/
+*/__pycache__/
 
 /kasushi/_version.py
