@@ -1,30 +1,60 @@
 import asyncio
 import json
 import logging
+import random
+import uuid
+from typing import Dict, Type
 
 import aiohttp
 from discord.ext import commands
 
-from .base import IPC
+from .base import Handler, LoginHandler
 
 logger = logging.getLogger(__name__)
 
 
-class IPCClient(IPC):
+class WaitingEvent(asyncio.Event):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.response = None
+
+
+class IPCClient:
     type: str = None
 
     def __init__(self, bot: commands.AutoShardedBot, config: dict):
-        super().__init__(bot, config)
-        self._URL = config['server_host'] + "/ws"
+        self.handlers: Dict[str, Handler] = {}
+        self.bot = bot
+        self.config = config
+        self._URL = config['client']['server_url'] + "/ws"
+        self.online = False
         self.closed = False
         self.ws = None
         self.session = None
+        self.waiting_events = {}
+
+        self.add_handler(LoginHandler)
+
+    def add_handler(self, handler: Type[Handler]):
+        self.handlers[handler.name] = handler(self)
 
     async def handle_message(self, data):
-        type = data['type']
-        if type == 'login_success':
-            logger.info("IPC Client authenticated")
-            self.online = True
+        type = data.get('type')
+        rtoken = data.get('rtoken')
+        handler = data.get('handler')
+        if rtoken and type == 'response':
+            event = self.waiting_events.get(rtoken)
+            if event:
+                event.response = data['data']
+                event.set()
+                return
+
+        ret = await self.handlers[handler].get_response(data['data'])
+        if ret:
+            ret['handler'] = handler
+            ret['rtoken'] = rtoken
+            ret['type'] = 'response'
+            await self.send(ret)
 
     async def async_setup(self):
         self.session = aiohttp.ClientSession()
@@ -43,13 +73,10 @@ class IPCClient(IPC):
 
             async with self.session.ws_connect(self._URL) as ws:
                 logger.debug("IPC Client websocket connection established")
-                await ws.send_json({'type': 'login',
-                                    'secret': self.config['shared_secret'],
-                                    'shards': list(self.bot.shards.keys()),
-                                    'guilds': [guild.id for guild in self.bot.guilds]
-                                    })
-                logger.debug("IPC Client login sent")
                 self.ws = ws
+                await self.handlers['login'].send_request()
+                logger.debug("IPC Client login sent")
+
                 async for msg in self.ws:
                     logger.debug("IPC Client message recv'd: " + str(msg))
                     if msg.type == aiohttp.WSMsgType.TEXT:
@@ -75,5 +102,15 @@ class IPCClient(IPC):
             await self.session.close()
             logger.debug("IPC Client session closed")
 
+    async def send_wait(self, data):
+        data['rtoken'] = uuid.uuid4().hex
+        event = WaitingEvent()
+        self.waiting_events[data['rtoken']] = event
+        await self.send(data)
+        await event.wait()
+        del self.waiting_events[data['rtoken']]
 
-type = 'client'
+        return event.response
+
+    async def send(self, data):
+        await self.ws.send_json(data)

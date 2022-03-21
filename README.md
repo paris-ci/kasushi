@@ -95,10 +95,15 @@ shard's IPC server.
 ```python
 {
     "ipc": {
-        "server_host": "http://127.0.0.1:12321",  # Ignored on shard 0
-        "server_listen_host": "0.0.0.0",
-        "server_listen_port": 12321,
         "shared_secret": "secret",  # This is used to authenticate with the IPC server.
-    }
+        "server": {
+            "host": "0.0.0.0",
+            "port": 12321,
+        },
+        "client": {
+            "server_url": "http://127.0.0.1:12321",
+        },
+        "handlers": [GuildInfoHandler]  # See above for handlers.
+    },
 }
 ```

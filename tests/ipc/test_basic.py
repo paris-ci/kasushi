@@ -1,20 +1,26 @@
-# Test websockets connection
 import discord
 import pytest
 import asyncio
 
+from kasushi.ipc.handlers import GuildInfoHandler
 from kasushi.ipc.client import IPCClient
 from kasushi.ipc.server import IPCServer
 from utils import setup_logger
 
 setup_logger()
 
-configuration = {
-    "server_host": "http://127.0.0.1:12321",  # Ignored on shard 0
-    "server_listen_host": "0.0.0.0",
-    "server_listen_port": 12321,
-    "shared_secret": "secret",  # This is used to authenticate with the IPC server.
-}
+configuration = \
+    {
+        "shared_secret": "secret",  # This is used to authenticate with the IPC server.
+        "server": {
+            "host": "0.0.0.0",
+            "port": 12321,
+        },
+        "client": {
+            "server_url": "http://127.0.0.1:12321",
+        },
+        "handlers": [GuildInfoHandler],  # See above for handlers.
+    }
 
 
 class BotMock:
@@ -25,23 +31,28 @@ class BotMock:
 
 @pytest.mark.asyncio
 async def test_simple_login():
-    botMockServer = BotMock()
-    botMockClient = BotMock()
+    botMockClient1 = BotMock()
+    botMockClient2 = BotMock()
 
-    botMockServer.shards = {0: None}
-    botMockServer.guilds = [discord.Object(id=0), discord.Object(id=1), discord.Object(id=2)]
+    botMockClient1.shards = {0: None}
+    botMockClient1.guilds = [discord.Object(id=0), discord.Object(id=1), discord.Object(id=2)]
 
-    botMockClient.shards = {1: None}
-    botMockClient.guilds = [discord.Object(id=10), discord.Object(id=11)]
+    botMockClient2.shards = {1: None}
+    botMockClient2.guilds = [discord.Object(id=10), discord.Object(id=11)]
 
-    server = IPCServer(botMockServer, configuration)
+    server = IPCServer(configuration)
     await server.async_setup()
 
-    client = IPCClient(botMockClient, configuration)
-    await client.async_setup()
+    client1 = IPCClient(botMockClient1, configuration)
+    client2 = IPCClient(botMockClient2, configuration)
+    await client1.async_setup()
+    await client2.async_setup()
 
     await asyncio.sleep(2)
-    assert server.clients_count == 1
+    assert len(server._active_ws) == 2
+    assert 0 in server.shard_to_ws_mapping.keys()
+    assert 1 in server.shard_to_ws_mapping.keys()
 
     await server.async_teardown()
-    await client.async_teardown()
+    await client1.async_teardown()
+    await client2.async_teardown()

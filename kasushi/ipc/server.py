@@ -1,53 +1,40 @@
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Type
 
 import aiohttp.web
 from aiohttp.web_ws import WebSocketResponse
 from discord.ext import commands
 
-from .base import IPC
+from .base import Handler, LoginHandler
 
 logger = logging.getLogger(__name__)
 
 
-class IPCServer(IPC):
-    type = 'server'
+class IPCServer:
+    def __init__(self, config: dict, *args, **kwargs):
+        self.config = config
 
-    def __init__(self, bot: commands.AutoShardedBot, config: dict, *args, **kwargs):
-        super().__init__(bot, config)
-        self.clients_count = 0
         self._active_ws: List[WebSocketResponse] = []
-        self._shard_to_ws_mapping: Dict[int, WebSocketResponse] = {}
-        self._guild_to_ws_mapping: Dict[int, WebSocketResponse] = {}
+
+        self.return_paths: Dict[str, WebSocketResponse] = {}
+
+        self.handlers: Dict[str, Handler] = {}
+
+        self.shard_to_ws_mapping: Dict[int, WebSocketResponse] = {}
+        self.guild_to_ws_mapping: Dict[int, WebSocketResponse] = {}
+        self.add_handler(LoginHandler)
+
+    def add_handler(self, handler: Type[Handler]):
+        self.handlers[handler.name] = handler(self)
 
     async def index(self, request):
         return aiohttp.web.Response(text='This is a websocket IPC server for Kasushi IPC')
-
-    async def handle_login(self, ws: WebSocketResponse, data: Dict[str, Any]):
-        if not data.get('type') == 'login':
-            await ws.send_json({'type': 'login_failed', 'message': 'Invalid method type'})
-            return False
-        elif data.get('secret') != self.config.get('shared_secret'):
-            await ws.send_json({'type': 'login_failed', 'message': 'Invalid secret'})
-            return False
-        else:
-            shards = data.get('shards', [])
-            for shard in shards:
-                self._shard_to_ws_mapping[shard] = ws
-
-            guilds = data.get('guilds', [])
-            for guild in guilds:
-                self._guild_to_ws_mapping[guild] = ws
-
-            await ws.send_json({'type': 'login_success'})
-            return True
 
     async def websocket_handler(self, request):
         # Got websocket connection
         ws = aiohttp.web.WebSocketResponse()
         await ws.prepare(request)
         self._active_ws.append(ws)
-        self.clients_count += 1
         logged_in = False
 
         async for msg in ws:
@@ -57,19 +44,36 @@ class IPCServer(IPC):
                 if logged_in:
                     await self.handle_incoming_message(ws, json_data)
                 else:
-                    logged_in = await self.handle_login(ws, json_data)
+                    await self.handle_login_message(ws, json_data)
 
-        self.clients_count -= 1
         self._active_ws.remove(ws)
         return ws
 
     async def handle_incoming_message(self, ws, data):
         logger.debug(f'[{ws}] {data}')
         type = data.get('type')
+        handler = data.get('handler')
+        rtoken = data.get('rtoken')
+        if type == 'request':
+            handler_class = self.handlers.get(handler)
+            if handler_class:
+                if rtoken and not handler_class.server_reply:
+                    self.return_paths[rtoken] = ws
+                await handler_class.server_dispatch(ws, data)
+            else:
+                logger.warning(f'[{ws}] Handler {handler} not found, cannot forward')
+        else:
+            if rtoken:
+                try:
+                    await self.return_paths[rtoken].send_json(data)
+                except KeyError:
+                    logger.warning(f'[{ws}] No return path for {rtoken}')
+                    return
 
-        if type == 'get_guild_info':
-            guild_pk = data.get('guild_pk')
-
+    async def handle_login_message(self, ws, data):
+        data['handler'] = 'login'
+        data['type'] = 'request'
+        await self.handle_incoming_message(ws, data)
 
     async def async_setup(self):
         app = aiohttp.web.Application()
@@ -86,8 +90,10 @@ class IPCServer(IPC):
 
     async def async_teardown(self):
         logger.debug("IPC Server closing")
-        for ws in self._active_ws:
+        for ws in self._active_ws[:]:
+            logger.debug(f"Closing {ws}")
             await ws.close()
+            logger.debug(f"Closed {ws}")
 
         await self._site.stop()
         logger.debug("IPC Server closed")

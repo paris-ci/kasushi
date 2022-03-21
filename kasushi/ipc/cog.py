@@ -4,36 +4,53 @@ from typing import Optional
 from discord.ext import commands
 
 from kasushi.exceptions import InvalidConfigurationError
-from kasushi.ipc.base import IPC
 from kasushi.ipc.client import IPCClient
 from kasushi.ipc.server import IPCServer
 
 
 class IPCCog(commands.Cog):
     def __init__(self, bot: commands.AutoShardedBot) -> None:
+        self.server = None
         self.bot = bot
-        self.bot.ipc = IPC(bot, {})
 
     async def config_check(self) -> dict:
-        config: dict = self.bot._kasushi_config
-        ipc_config: Optional[dict] = config.get('ipc')
-        if not ipc_config:
-            raise InvalidConfigurationError(
-                message="IPC isn't configured. Please set the `ipc` in your config."
-            )
+        config: dict = self.bot._kasushi_config['ipc']
 
-        ipc_server = ipc_config.get('server_host')
-        if not ipc_server:
-            raise InvalidConfigurationError(
-                message="IPC isn't configured. Please set the `server_host` key in your ipc config."
-            )
-
-        shared_secret = ipc_config.get('shared_secret')
+        shared_secret = config.get('shared_secret')
         if not shared_secret:
-            raise InvalidConfigurationError(
-                message="IPC isn't configured. "
-                        "Please set the `shared_secret` key in your ipc config to a random string of your choosing."
-            )
+            raise InvalidConfigurationError('IPC `shared_secret` is not set')
+        elif shared_secret == '' or shared_secret == 'secret':
+            raise InvalidConfigurationError('IPC `shared_secret` is not secret enough')
+
+        try:
+            ipc_server = config['ipc_server']
+        except KeyError:
+            raise InvalidConfigurationError('IPC `ipc_server` is not set')
+        else:
+            try:
+                ipc_server_host = ipc_server['host']
+            except KeyError:
+                raise InvalidConfigurationError('IPC `ipc_server.host` is not set')
+
+            try:
+                ipc_server_port = ipc_server['port']
+            except KeyError:
+                raise InvalidConfigurationError('IPC `ipc_server.port` is not set')
+
+        try:
+            ipc_client = config['client']
+        except KeyError:
+            raise InvalidConfigurationError('IPC `client` is not set')
+        else:
+            try:
+                ipc_client_server_url = ipc_client['server_url']
+            except KeyError:
+                raise InvalidConfigurationError('IPC `client.server_url` is not set')
+            else:
+                if not ipc_client_server_url.startswith('http'):
+                    raise InvalidConfigurationError('IPC `client.server_url` must start with http or https')
+
+        config.setdefault('handlers', [])
 
         return config
 
@@ -45,13 +62,23 @@ class IPCCog(commands.Cog):
 
         shard_zero = self.bot.get_shard(0)
         if shard_zero:
-            self.bot.ipc = IPCServer(self.bot, config['ipc'])
-        else:
-            self.bot.ipc = IPCClient(self.bot, config['ipc'])
+            self.server = IPCServer(config['server'])
+
+            for handler in config['handlers']:
+                self.server.add_handler(handler)
+
+            await self.server.async_setup()
+
+        self.bot.ipc = IPCClient(self.bot, config['client'])
+        for handler in config['handlers']:
+            self.bot.ipc.add_handler(handler)
 
         await self.bot.ipc.async_setup()
 
     async def cog_unload(self) -> None:
+        if self.server:
+            await self.server.async_teardown()
+
         await self.bot.ipc.async_teardown()
 
 
