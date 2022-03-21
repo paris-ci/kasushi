@@ -72,7 +72,7 @@ class CacheCog(commands.Cog):
         self.raw_cache: Optional[aiomcache.Client] = None
         self.cache: Optional[Cache] = None
 
-    async def config_check(self) -> None:
+    async def config_check(self) -> dict:
         config: dict = self.bot._kasushi_config
         cache_config: Optional[dict] = config.get('cache')
         if not cache_config:
@@ -86,17 +86,17 @@ class CacheCog(commands.Cog):
                 message="Cache isn't configured. Please set the `server_ip` key in your cache config."
             )
 
-        cache_port = cache_config.get('server_port')
-        if not cache_port:
+        server_port = cache_config.get('server_port')
+        if not server_port:
             raise InvalidConfigurationError(
                 message="Cache isn't configured. Please set the `server_port` key in your cache config."
             )
 
-        return
+        return config
 
     async def cog_load(self) -> None:
-        await self.config_check()
-        mc = aiomcache.Client("127.0.0.1", 11211)
+        config = await self.config_check()
+        mc = aiomcache.Client(config["cache"]["server_ip"], config["cache"]["server_port"])
         self.raw_cache = mc
         self.cache = Cache(self.bot, mc)
         self.bot.cache = self.cache
