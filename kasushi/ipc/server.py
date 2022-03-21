@@ -1,5 +1,5 @@
 import logging
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 
 import aiohttp.web
 from aiohttp.web_ws import WebSocketResponse
@@ -17,8 +17,8 @@ class IPCServer(IPC):
         super().__init__(bot, config)
         self.clients_count = 0
         self._active_ws: List[WebSocketResponse] = []
-        self._ws_to_shard_mapping: Dict[int, WebSocketResponse] = {}
-        self._ws_to_guild_mapping: Dict[int, WebSocketResponse] = {}
+        self._shard_to_ws_mapping: Dict[int, WebSocketResponse] = {}
+        self._guild_to_ws_mapping: Dict[int, WebSocketResponse] = {}
 
     async def index(self, request):
         return aiohttp.web.Response(text='This is a websocket IPC server for Kasushi IPC')
@@ -33,11 +33,11 @@ class IPCServer(IPC):
         else:
             shards = data.get('shards', [])
             for shard in shards:
-                self._ws_to_shard_mapping[shard] = ws
+                self._shard_to_ws_mapping[shard] = ws
 
             guilds = data.get('guilds', [])
             for guild in guilds:
-                self._ws_to_guild_mapping[guild] = ws
+                self._guild_to_ws_mapping[guild] = ws
 
             await ws.send_json({'type': 'login_success'})
             return True
@@ -65,6 +65,11 @@ class IPCServer(IPC):
 
     async def handle_incoming_message(self, ws, data):
         logger.debug(f'[{ws}] {data}')
+        type = data.get('type')
+
+        if type == 'get_guild_info':
+            guild_pk = data.get('guild_pk')
+
 
     async def async_setup(self):
         app = aiohttp.web.Application()
