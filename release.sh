@@ -26,8 +26,11 @@ done
 
 echo -e "==> Previous version was v$COLOR_RED$PREVIOUS_GIT_TAG$COLOR_NC"
 
+# Sementic versionning: get the next PATCH version using bash only
+NEXT_VERSION=$(echo "$PREVIOUS_GIT_TAG" | awk -F. '{$NF = $NF + 1; print $0}')
+
 # Ask for input
-echo "==> ! Enter the new version number (e.g. 1.2.3)> "
+echo "==> ! Enter the new version number (e.g. $NEXT_VERSION)> "
 read -r NEW_GIT_TAG
 
 # Create tag for new release
