@@ -4,3 +4,4 @@
 */__pycache__/
 
 /kasushi/_version.py
+*/.pytest_cache
