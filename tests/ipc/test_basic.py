@@ -1,13 +1,15 @@
 import discord
 import pytest
 import asyncio
+import logging
 
-from kasushi.ipc.handlers import GuildInfoHandler
+from kasushi.ipc.handlers import GuildInfoHandler, ShardStatusHandler
 from kasushi.ipc.client import IPCClient
 from kasushi.ipc.server import IPCServer
 from utils import setup_logger
 
 setup_logger()
+logger = logging.getLogger(__name__)
 
 configuration = \
     {
@@ -19,7 +21,7 @@ configuration = \
         "client": {
             "server_url": "http://127.0.0.1:12321",
         },
-        "handlers": [GuildInfoHandler],  # See above for handlers.
+        "handlers": [GuildInfoHandler, ShardStatusHandler],  # See above for handlers.
     }
 
 
@@ -28,17 +30,43 @@ class BotMock:
         self.shards = {}
         self.guilds = []
 
+    def get_guild(self, id):
+        for guild in self.guilds:
+            if guild.id == id:
+                return guild
+        return None
+
+
+class GuildMock(discord.Object):
+    def __init__(self, id):
+        super().__init__(id)
+        self.name = "Guild {}".format(id)
+        self.member_count = id * 121
+
+
+class ShardMock(discord.Object):
+    def __init__(self, id):
+        super().__init__(id)
+        self.latency = id * 201
+
+    def is_ws_ratelimited(self):
+        return False
+
+    def is_closed(self):
+        return False
+
 
 @pytest.mark.asyncio
 async def test_simple_login():
+    logger.info("Starting test_simple_login")
     botMockClient1 = BotMock()
     botMockClient2 = BotMock()
 
-    botMockClient1.shards = {0: None}
-    botMockClient1.guilds = [discord.Object(id=0), discord.Object(id=1), discord.Object(id=2)]
+    botMockClient1.shards = {0: ShardMock(0)}
+    botMockClient1.guilds = [GuildMock(id=0), GuildMock(id=1), GuildMock(id=2)]
 
-    botMockClient2.shards = {1: None}
-    botMockClient2.guilds = [discord.Object(id=10), discord.Object(id=11)]
+    botMockClient2.shards = {1: ShardMock(1)}
+    botMockClient2.guilds = [GuildMock(id=10), GuildMock(id=11)]
 
     server = IPCServer(configuration)
     await server.async_setup()
@@ -48,7 +76,9 @@ async def test_simple_login():
     await client1.async_setup()
     await client2.async_setup()
 
-    await asyncio.sleep(2)
+    await client1.online.wait()
+    await client2.online.wait()
+
     assert len(server._active_ws) == 2
     assert 0 in server.shard_to_ws_mapping.keys()
     assert 1 in server.shard_to_ws_mapping.keys()
@@ -56,3 +86,69 @@ async def test_simple_login():
     await server.async_teardown()
     await client1.async_teardown()
     await client2.async_teardown()
+
+
+@pytest.mark.asyncio
+async def test_direct_query():
+    botMockClient1 = BotMock()
+    botMockClient2 = BotMock()
+
+    botMockClient1.shards = {0: ShardMock(0)}
+    botMockClient1.guilds = [GuildMock(id=0), GuildMock(id=1), GuildMock(id=2)]
+
+    botMockClient2.shards = {1: ShardMock(1)}
+    botMockClient2.guilds = [GuildMock(id=10), GuildMock(id=11)]
+
+    server = IPCServer(configuration)
+    await server.async_setup()
+
+    client1 = IPCClient(botMockClient1, configuration)
+    client2 = IPCClient(botMockClient2, configuration)
+    await client1.async_setup()
+    await client2.async_setup()
+
+    guild_info = await client1.send_request('guild_info', guild_id=10)
+
+    assert guild_info['success'] is True
+    assert guild_info['guild']['id'] == 10
+    assert guild_info['guild']['name'] == "Guild 10"
+    assert guild_info['guild']['member_count'] == 1210
+
+    await server.async_teardown()
+    await client1.async_teardown()
+    await client2.async_teardown()
+
+
+@pytest.mark.asyncio
+async def test_broadcast_query():
+    botMockClient1 = BotMock()
+    botMockClient2 = BotMock()
+
+    botMockClient1.shards = {0: ShardMock(0)}
+    botMockClient1.guilds = [GuildMock(id=0), GuildMock(id=1), GuildMock(id=2)]
+
+    botMockClient2.shards = {1: ShardMock(1)}
+    botMockClient2.guilds = [GuildMock(id=10), GuildMock(id=11)]
+
+    server = IPCServer(configuration)
+    await server.async_setup()
+
+    client1 = IPCClient(botMockClient1, configuration)
+    client2 = IPCClient(botMockClient2, configuration)
+    await client1.async_setup()
+    await client2.async_setup()
+
+    shard_status = await client1.send_request('shard_status')
+
+    assert shard_status['0']['latency'] == 0
+    assert shard_status['1']['latency'] == 201
+    assert shard_status['0']['ws_ratelimited'] is False
+    assert shard_status['1']['ws_ratelimited'] is False
+    assert shard_status['0']['closed'] is False
+    assert shard_status['1']['closed'] is False
+
+    await server.async_teardown()
+    await client1.async_teardown()
+    await client2.async_teardown()
+
+

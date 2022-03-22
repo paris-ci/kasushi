@@ -5,3 +5,7 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools_scm]
 write_to = "kasushi/_version.py"
 local_scheme = "no-local-version"
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+log_cli = "True"

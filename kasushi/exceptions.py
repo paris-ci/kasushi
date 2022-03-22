@@ -32,3 +32,19 @@ class InvalidRequirementsError(KasushiError):
 
     def __str__(self):
         return self.message
+
+
+class IPCInvalidHandlerError(KasushiError):
+    """
+    Exception raised when calling for an invalid handler.
+    You probably need to check the spelling to send_request.
+
+    Attributes:
+        message -- explanation of the error
+    """
+
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return self.message

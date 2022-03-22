@@ -27,7 +27,7 @@ class IPCClient:
         self.bot = bot
         self.config = config
         self._URL = config['client']['server_url'] + "/ws"
-        self.online = False
+        self.online = asyncio.Event()
         self.closed = False
         self.ws = None
         self.session = None
@@ -35,8 +35,19 @@ class IPCClient:
 
         self.add_handler(LoginHandler)
 
+        for handler in self.config['handlers']:
+            self.add_handler(handler)
+
     def add_handler(self, handler: Type[Handler]):
         self.handlers[handler.name] = handler(self)
+
+    async def send_request(self, name, *args, **kwargs):
+        await self.online.wait()
+        handler = self.handlers.get(name)
+        if handler:
+            return await self.handlers[name].send_request(*args, **kwargs)
+        else:
+            raise Exception("Handler not found. Available handlers: " + str(list(self.handlers.keys())))
 
     async def handle_message(self, data):
         type = data.get('type')
@@ -47,13 +58,13 @@ class IPCClient:
             if event:
                 event.response = data['data']
                 event.set()
-                return
+            else:
+                pass
+            return
 
-        ret = await self.handlers[handler].get_response(data['data'])
-        if ret:
-            ret['handler'] = handler
-            ret['rtoken'] = rtoken
-            ret['type'] = 'response'
+        res = await self.handlers[handler].get_response(data['data'])
+        if res:
+            ret = {'data': res, 'handler': handler, 'rtoken': rtoken, 'type': 'response'}
             await self.send(ret)
 
     async def async_setup(self):
@@ -74,7 +85,8 @@ class IPCClient:
             async with self.session.ws_connect(self._URL) as ws:
                 logger.debug("IPC Client websocket connection established")
                 self.ws = ws
-                await self.handlers['login'].send_request()
+                asyncio.ensure_future(
+                    self.handlers['login'].send_request())  # Don't use client.send_request, we are not online yet.
                 logger.debug("IPC Client login sent")
 
                 async for msg in self.ws:
@@ -84,6 +96,7 @@ class IPCClient:
                     elif msg.type in (aiohttp.WSMsgType.CLOSED,
                                       aiohttp.WSMsgType.ERROR):
                         break
+            self.online.clear()
             logger.debug("IPC Client websocket closed")
             await asyncio.sleep(2)
 
