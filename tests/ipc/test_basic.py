@@ -3,7 +3,7 @@ import pytest
 import asyncio
 import logging
 
-from kasushi.ipc.handlers import GuildInfoHandler, ShardStatusHandler
+from kasushi.ipc.handlers import GuildInfoHandler, ShardStatusHandler, FindMemberHandler
 from kasushi.ipc.client import IPCClient
 from kasushi.ipc.server import IPCServer
 from utils import setup_logger
@@ -21,7 +21,7 @@ configuration = \
         "client": {
             "server_url": "http://127.0.0.1:12321",
         },
-        "handlers": [GuildInfoHandler, ShardStatusHandler],  # See above for handlers.
+        "handlers": [GuildInfoHandler, ShardStatusHandler, FindMemberHandler],  # See above for handlers.
     }
 
 
@@ -42,6 +42,10 @@ class GuildMock(discord.Object):
         super().__init__(id)
         self.name = "Guild {}".format(id)
         self.member_count = id * 121
+
+    def get_member(self, id):
+        if str(self.id).startswith(str(id)):
+            return True
 
 
 class ShardMock(discord.Object):
@@ -152,3 +156,32 @@ async def test_broadcast_query():
     await client2.async_teardown()
 
 
+@pytest.mark.asyncio
+async def test_find_member():
+    botMockClient1 = BotMock()
+    botMockClient2 = BotMock()
+
+    botMockClient1.shards = {0: ShardMock(0)}
+    botMockClient1.guilds = [GuildMock(id=0), GuildMock(id=1), GuildMock(id=2)]
+
+    botMockClient2.shards = {1: ShardMock(1)}
+    botMockClient2.guilds = [GuildMock(id=10), GuildMock(id=11)]
+
+    server = IPCServer(configuration)
+    await server.async_setup()
+
+    client1 = IPCClient(botMockClient1, configuration)
+    client2 = IPCClient(botMockClient2, configuration)
+    await client1.async_setup()
+    await client2.async_setup()
+
+    find_member = await client1.send_request('find_member', user_id=1)
+
+    assert len(find_member) == 3
+    assert 1 in find_member
+    assert 10 in find_member
+    assert 11 in find_member
+
+    await server.async_teardown()
+    await client1.async_teardown()
+    await client2.async_teardown()
