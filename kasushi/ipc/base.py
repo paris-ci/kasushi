@@ -32,7 +32,7 @@ class Handler:
 
     async def get_request_data(self, *args, **kwargs):
         self.ipc: 'IPCClient'
-        return {}
+        return kwargs
 
     async def server_dispatch(self, sender_ws: 'WSData', data: dict):
         self.ipc: 'IPCServer'

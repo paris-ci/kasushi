@@ -1,10 +1,10 @@
-from typing import Optional
+from typing import Optional, List
 
 from aiohttp.web_ws import WebSocketResponse
 
 from .base import Handler, BroadcastHandler
 from .client import IPCClient
-from .server import IPCServer
+from .server import IPCServer, WSData
 
 
 class GuildInfoHandler(Handler):
@@ -38,7 +38,6 @@ class GuildInfoHandler(Handler):
 
 
 class ShardStatusHandler(BroadcastHandler):
-    server_reply = True
     name = 'shard_status'
 
     async def aggregate_responses(self, responses: dict):
@@ -58,3 +57,23 @@ class ShardStatusHandler(BroadcastHandler):
             }
 
         return statuses
+
+
+class FindMemberHandler(BroadcastHandler):
+    name = 'find_member'
+
+    async def aggregate_responses(self, responses: dict[WSData, List[int]]):
+        res = []
+        for ws, response in responses.items():
+            res.extend(response)
+        return res
+
+    async def get_response(self, data: dict) -> List[int]:
+        self.ipc: 'IPCClient'
+        guilds_ids = []
+        for guild in self.ipc.bot.guilds:
+            if guild.get_member(data['user_id']):
+                guilds_ids.append(guild.id)
+
+        return guilds_ids
+
