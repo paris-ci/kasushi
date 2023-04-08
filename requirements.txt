@@ -1,4 +1,4 @@
 aiomcache==0.8.1
 aiohttp==3.8.4
-pytest==7.2.2
+pytest==7.3.0
 pytest-asyncio==0.21.0
